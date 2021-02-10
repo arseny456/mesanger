@@ -17,7 +17,6 @@ from tkinter import filedialog
 from tkinter import messagebox
 import os
 
-
 # interface colors
 root_color = 'cyan'
 sel_color = 'red'
@@ -26,7 +25,7 @@ sel_color = 'red'
 btn_width = 14
 text_width = 400
 
-list_partners = [('all', '255.255.255.255', -1), ('self', '127.0.0.1', 0), ('hypercube', '192.168.1.250', 100)]
+list_partners = [('all', '255.255.255.255', -1), ('self', '127.0.0.1', -1), ('hypercube', '192.168.1.150', -1)]
 partner_timeout = 3000
 
 # UDP socket for receive messages
@@ -40,7 +39,7 @@ uServSock.bind(SOCK_ADDR_IN)
 # очередь для приема сообщений
 list_in = []
 busy_in = 0
-main_tau = 30  # период цикла главной функции
+main_tau = 30  # период цикла главной функции`
 
 # UDP socket for transmit messages
 HOST_OUT = '127.0.0.1'
@@ -82,9 +81,18 @@ def send_msg(msg, ip):
 
 
 def get_timems():
-    return int(time()*1000)
+    return int(time() * 1000)
 
 
+def work_in_tftp():
+    cud_dir = os.getcwd()
+    tftpServer = minimumTFTP.Server(cud_dir)
+    tftpServer.run()
+    while True:
+        sleep(0.001)
+
+
+# create interFace
 root = tk.Tk()
 dFont = font.Font(family='helvetica', size=12)
 style = ttk.Style()
@@ -103,12 +111,12 @@ panel_msg = tk.Frame(panel_left, width=700)
 panel_msg.grid(row=2, column=0)
 
 # text space. For show msgs
-tbx_msg = tk.Text(panel_msg, height=30, wrap=tk.WORD, font=dFont)
-tbx_msg.pack(side='left', fill='both', expand=1)
+text_bx_msg = tk.Text(panel_msg, height=30, wrap=tk.WORD, font=dFont)
+text_bx_msg.pack(side='left', fill='both', expand=1)
 
 scroll_bar_msg = tk.Scrollbar(panel_msg)
-scroll_bar_msg['command'] = tbx_msg.yview
-tbx_msg['yscrollcommand'] = scroll_bar_msg.set
+scroll_bar_msg['command'] = text_bx_msg.yview
+text_bx_msg['yscrollcommand'] = scroll_bar_msg.set
 scroll_bar_msg.pack(side='right', fill='y')
 
 panel_send = tk.Frame(panel_left)
@@ -136,12 +144,11 @@ def function_tbx_send(event):
     if len(text_send) > 0:
         send_msg(my_nick + '|' + partner_nick + '|' + text_send, HOST_OUT)
         text_out = '\n( >>> ' + partner_nick + '  ):    ' + text_send
-        tbx_msg.insert(tk.END, text_out)
+        text_bx_msg.insert(tk.END, text_out)
         tbx_send.delete(1.0, tk.END)
 
 
 tbx_send.bind("<Return>", function_tbx_send)
-
 
 # right panel
 panel_right = tk.Frame(root, background=root_color)
@@ -153,7 +160,6 @@ var_nick = tk.StringVar()
 var_nick.set('')
 edit_nick = ttk.Entry(panel_right, width=btn_width, textvariable=var_nick, font=dFont)
 edit_nick.grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-
 
 # partner nick space
 ttk.Label(panel_right, text='Партнер:').grid(row=2, column=0, sticky=tk.W, pady=5)
@@ -177,6 +183,13 @@ listbox_partners.config(yscrollcommand=scrollbar_partners.set)
 
 
 def func_set_partner(event):
+    '''
+    binding the double clicking at partner in listbox of partners
+
+    :param event: None
+    :return: None
+    '''
+
     global HOST_OUT
     index = listbox_partners.curselection()
     partner = listbox_partners.get(index)
@@ -188,6 +201,28 @@ def func_set_partner(event):
 
 listbox_partners.bind("<Double-1>", func_set_partner)
 
+
+# button for sending a files
+def send_file():
+    if HOST_OUT == '255.255.255.255':
+        msgBox = messagebox.showwarning("Error!!!!!", "U can send file only to a specific partner")
+        return
+
+    # select file in dialog window
+    file_name = filedialog.askopenfilename(initialdir='.', title='выбыры какой фаел отправить',
+                                           filetypes=(('all files', '*.*'), ('txt files', '*.txt')))
+    if len(file_name) < 1: return
+    delim_pos = file_name.rfind('/')    # получаем путь к файлу и имя файла
+    path = file_name[:delim_pos]
+    file_name = file_name[delim_pos+1:]
+    print(path, file_name)
+
+    tftpClient = minimumTFTP.Client(HOST_OUT, path, file_name)
+    tftpClient.put()
+
+
+ttk.Button(panel_right, text='send file', width=btn_width,
+           command=send_file).grid(row=7, column=0, sticky=tk.W, padx=5, pady=5)
 
 # when starting soft:
 cur_time = get_timems()
@@ -207,9 +242,13 @@ tr_in = thread.Thread(target=work_in)
 tr_in.daemon = True
 tr_in.start()
 
-
 # get start time
 time_stamp = get_timems()
+
+# create and start geting files thread
+tr_in_tftp = thread.Thread(target=work_in_tftp)
+tr_in_tftp.daemon = True
+tr_in_tftp.start()
 
 
 def main():
@@ -218,7 +257,7 @@ def main():
     global time_stamp
     global HOST_OUT
 
-    flag_partnerchange = 0      # сбросить признак изменения партнера
+    flag_partnerchange = 0  # сбросить признак изменения партнера
     my_nick = var_nick.get()
 
     if len(list_in) > 0:
@@ -238,7 +277,7 @@ def main():
 
             if msg_data != "*":
                 text_in = '\n(  ' + msg_nick + '  >>>>   ):    ' + msg_data
-                tbx_msg.insert(tk.END, text_in)
+                text_bx_msg.insert(tk.END, text_in)
 
             # find partner in list, using IP
             select_number = -1
@@ -255,10 +294,10 @@ def main():
 
     # check time, and delete "old" accounts
     cur_time = get_timems()
-    for num in range(len(list_partners)-1, -1, -1):
-        if list_partners[num][2] == -1:     # do not delete "all"
+    for num in range(len(list_partners) -1, -1, -1):
+        if list_partners[num][2] == -1:  # do not delete "all"
             continue
-        if cur_time > list_partners[num][2] + 3*partner_timeout:
+        if cur_time > list_partners[num][2] + 3 * partner_timeout:
             del list_partners[num]
             flag_partnerchange = 1
 
@@ -293,8 +332,6 @@ def main():
 
 main()
 
-
 root.mainloop()
-
 
 uClientSock.close()
