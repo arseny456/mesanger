@@ -12,6 +12,12 @@ import socket as sock
 import threading as thread
 from time import *
 
+import minimumTFTP
+from tkinter import filedialog
+from tkinter import messagebox
+import os
+
+
 # interface colors
 root_color = 'cyan'
 sel_color = 'red'
