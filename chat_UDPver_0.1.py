@@ -55,24 +55,29 @@ uClientSock.setsockopt(sock.SOL_SOCKET, sock.SO_BROADCAST, 1)
 def work_in():
     global list_in
     global busy_in
+    # i = 1
     while True:
-        data, address = uServSock.recvfrom(BUF_SIZE)
-        local_data = data.decode('cp1251')
-        local_data = local_data.strip()
+                                                        # ожидаем данных с сервера
+        data, address = uServSock.recvfrom(BUF_SIZE)    # сохраняем данные и адрес отправителя
+        local_data = data.decode('cp1251')              # расшифровываем
+        local_data = local_data.strip()                 #
 
-        msg_time = str(get_timems())
+        msg_time = str(get_timems())                    # получаем текущее время
         str_data = address[0] + '|' + local_data + '|' + msg_time  # IP + сообщение
-
+        # i = i + 1
+        # print(i)
+        # аккуратно записываем сообщение в список входящих сообщений
         while busy_in:
             sleep(0.001)
         busy_in = 2
         list_in.append(str_data)
         busy_in = 0
 
-        sleep(0.001)
+        sleep(0.001)                                    # непонятно почему, но без этого не работает
     uServSock.close()
 
 
+# функция отправки сообщений адресату
 def send_msg(msg, ip):
     print(ip)
     st = msg.encode('cp1251')
@@ -80,14 +85,15 @@ def send_msg(msg, ip):
     uClientSock.sendto(st, sock_addr)
 
 
+# возвращает время в секундах прошедшее с начала эпохи (int)
 def get_timems():
     return int(time() * 1000)
 
-
+# функция приема файлов по tftp
 def work_in_tftp():
-    cud_dir = os.getcwd()
-    tftpServer = minimumTFTP.Server(cud_dir)
-    tftpServer.run()
+    cud_dir = os.getcwd()                           # получить путь к директории работы скрипта
+    tftpServer = minimumTFTP.Server(cud_dir)        # настроить сервер на данную директорию
+    tftpServer.run()                                # запустить сервер
     while True:
         sleep(0.001)
 
@@ -131,16 +137,19 @@ tbx_send['yscrollcommand'] = scroll_bar_send.set
 scroll_bar_send.pack(side='right', fill='y')
 
 
-# bind on <Enter> pressed
+# bind on <Enter> pressed       -       обработка нажатия "Enter" при вводе сообщения
 def function_tbx_send(event):
     my_nick = var_nick.get()
+                                        # не разрешаем отправку сообщения, если нет "регистрации"
     if not my_nick:
         my_nick = simpledialog.askstring('Регистрация', 'Введите ваш ник')
+        if not my_nick:                 # если имя так и не ввели - не отправляем сообщение
+            return 0
         var_nick.set(my_nick)
 
     partner_nick = var_partner.get()
     text_send = tbx_send.get(1.0, tk.END).strip()
-
+                                        # собираем "посылку" для отправки адресату
     if len(text_send) > 0:
         send_msg(my_nick + '|' + partner_nick + '|' + text_send, HOST_OUT)
         text_out = '\n( >>> ' + partner_nick + '  ):    ' + text_send
@@ -211,7 +220,8 @@ def send_file():
     # select file in dialog window
     file_name = filedialog.askopenfilename(initialdir='.', title='выбыры какой фаел отправить',
                                            filetypes=(('all files', '*.*'), ('txt files', '*.txt')))
-    if len(file_name) < 1: return
+    if len(file_name) < 1:
+        return
     delim_pos = file_name.rfind('/')    # получаем путь к файлу и имя файла
     path = file_name[:delim_pos]
     file_name = file_name[delim_pos+1:]
@@ -318,6 +328,8 @@ def main():
 
         if not my_nick:
             my_nick = simpledialog.askstring('Регистрация', 'Введите ваш ник')
+            if not my_nick:
+                return 0
             var_nick.set(my_nick)
 
         msg = my_nick + '|all|%*%'
